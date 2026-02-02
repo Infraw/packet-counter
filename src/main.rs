@@ -1,12 +1,26 @@
 use nfq::{Queue, Verdict};
-use std::process::Command;
+use std::io::Write;
+use std::process::Command; // needed this for flush the buffer
 
 fn main() {
-    let nfqueue = 0;
-    let _rules = IpTablesRedirector::new(nfqueue);
-    // TO DO: Open Queue
-    // TO DO: Accept All packets with Verdict
-    // TO DO: Print the output with print!("");
+    let nfq_num = 0;
+    let _rules = IpTablesRedirector::new(nfq_num);
+    let mut pckt_count: u64 = 0;
+    let mut queue = Queue::open().expect("[ERROR] Failed to open NFQUEUE");
+    queue
+        .bind(nfq_num)
+        .expect("[ERROR] Failed to bind to queue");
+    loop {
+        let mut pckt = queue.recv().expect("[ERROR] Failed to read packet.");
+        pckt.set_verdict(Verdict::Accept);
+        pckt_count += 1;
+        queue
+            .verdict(pckt)
+            .expect("[ERROR] Failed to push decision back to kernel.");
+
+        print!("\rPackets: {}", pckt_count);
+        std::io::stdout().flush().unwrap();
+    }
 }
 
 struct IpTablesRedirector {
