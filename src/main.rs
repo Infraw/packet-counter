@@ -1,6 +1,8 @@
 use nfq::{Queue, Verdict};
 use std::io::Write;
 use std::process::Command; // needed this for flush the buffer
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn main() {
     let nfq_num = 0;
@@ -10,8 +12,28 @@ fn main() {
     queue
         .bind(nfq_num)
         .expect("[ERROR] Failed to bind to queue");
-    loop {
-        let mut pckt = queue.recv().expect("[ERROR] Failed to read packet.");
+
+    // wrap it in arc so we can share it between two pieces of code
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    // set the handler
+    ctrlc::set_handler(move || {
+        println!("\n[INFO] Ctrl+C received! Stopping...");
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("[ERROR] Failed setting Ctrl-C handler");
+
+    println!("Listening for packets... (Press CTRL+C to quit.)");
+
+    while running.load(Ordering::SeqCst) {
+        // queue.recv() waits for a packet
+        // if you press CTRL+C while the program is waiting, it won't exit immediately
+        // its stuck waiting for a packet. This fixes it:
+        let mut pckt = match queue.recv() {
+            Ok(p) => p,
+            Err(_) => continue, // ignore errors and try again
+        };
         pckt.set_verdict(Verdict::Accept);
         pckt_count += 1;
         queue
