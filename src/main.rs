@@ -1,10 +1,13 @@
 use nfq::{Queue, Verdict};
 use std::io::Write;
 use std::process::Command; // needed this for flush the buffer
+use std::process::exit; // needed this for exit cleanly
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 fn main() {
+    root_check();
+
     let nfq_num = 0;
     let _rules = IpTablesRedirector::new(nfq_num);
     let mut pckt_count: u64 = 0;
@@ -68,6 +71,18 @@ impl Drop for IpTablesRedirector {
             .args(["-D", "INPUT", "-j", "NFQUEUE", "--queue-num", &num_str])
             .status()
             .expect("[ERROR] Failed to remove iptables rule");
-        println!("[INFO] IpTables rules removed.");
+        println!("\n[INFO] IpTables rules removed.");
+    }
+}
+
+fn is_root() -> bool {
+    unsafe { libc::geteuid() == 0 }
+}
+
+fn root_check() {
+    if !is_root() {
+        eprintln!("[ERROR] This program requires root privileges.");
+        eprintln!("        Please run with: sudo ./packet_counter");
+        exit(1);
     }
 }

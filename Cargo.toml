@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 command = "0.0.0"
 ctrlc = "3.5.1"
+libc = "0.2.180"
 nfq = "0.2.5"
