@@ -9,7 +9,7 @@ fn main() {
     root_check();
 
     let nfq_num = 0;
-    let _rules = IpTablesRedirector::new(nfq_num);
+    let _rules = IpTablesRedirector::new(nfq_num, "INPUT");
     let mut pckt_count: u64 = 0;
     let mut queue = Queue::open().expect("[ERROR] Failed to open NFQUEUE");
     queue
@@ -50,25 +50,34 @@ fn main() {
 
 struct IpTablesRedirector {
     que_num: u16,
+    chain: String,
 }
 
 impl IpTablesRedirector {
-    pub fn new(num: u16) -> Self {
+    pub fn new(num: u16, chain: &str) -> Self {
+        if chain != "INPUT" && chain != "OUTPUT" {
+            eprint!("[ERROR] Invalid chain: {}. Must be INPUT or OUTPUT.", chain);
+            exit(1);
+        }
         let num_str = num.to_string();
         Command::new("iptables")
-            .args(["-A", "INPUT", "-j", "NFQUEUE", "--queue-num", &num_str])
+            .args(["-A", chain, "-j", "NFQUEUE", "--queue-num", &num_str])
             .status()
             .expect("[ERROR] Failed to add iptables rule");
         println!("[INFO] IpTables rules added.");
-        IpTablesRedirector { que_num: num }
+        IpTablesRedirector {
+            que_num: num,
+            chain: chain.to_string(),
+        }
     }
 }
 
 impl Drop for IpTablesRedirector {
     fn drop(&mut self) {
         let num_str = self.que_num.to_string();
+        let chain = &self.chain;
         Command::new("iptables")
-            .args(["-D", "INPUT", "-j", "NFQUEUE", "--queue-num", &num_str])
+            .args(["-D", chain, "-j", "NFQUEUE", "--queue-num", &num_str])
             .status()
             .expect("[ERROR] Failed to remove iptables rule");
         println!("\n[INFO] IpTables rules removed.");
